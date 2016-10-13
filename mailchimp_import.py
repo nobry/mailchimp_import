@@ -42,15 +42,21 @@ def ReadCSV( filename ):
   f = open(filename, 'r')
   lines = f.read().splitlines()
   # Packs of 500 to be sent
-  mailchimport = []
-  csvimport = {}
-  csvimport['members'] = []
-  csvimport['update_existing'] = True
-  # Should be making packs of 500
+  mails = []
+  mails.append({})
+  mails[-1]['members'] = []
+  mails[-1]['update_existing'] = True
+  packcount = 0
   for line in lines:
     u = ProcessUser(line)
-    csvimport['members'].append(u)
-  return csvimport
+    mails[-1]['members'].append(u)
+    packcount = packcount+1
+    if packcount >= 500:
+      packcount = 0
+      mails.append({})
+      mails[-1]['members'] = []
+      mails[-1]['update_existing'] = True
+  return mails
 
 def ProcessUser(line):
   spl = line.split(";")
@@ -74,4 +80,7 @@ def ProcessUser(line):
 #GetLists()
 #BatchUser(LISTNUM, "userbatch_1.json")
 sendlist = ReadCSV("importlist.csv")
-SendList(LISTNUM, json.dumps(sendlist))
+
+# Send 500 by 500
+for pack in sendlist:
+  SendList(LISTNUM, json.dumps(pack))
