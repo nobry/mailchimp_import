@@ -69,7 +69,8 @@ def ProcessUser(line):
   if num > 1:
     name['FNAME'] = spl[1]
   if num > 2:
-    name['LNAME'] = spl[2]
+    #name['LNAME'] = spl[2]
+    u['language'] = spl[2]
   # Append name if defined
   if len(name) > 0:
     u['merge_fields'] = name
