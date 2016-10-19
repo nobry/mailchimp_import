@@ -4,18 +4,32 @@ import urllib2
 import base64
 import json
 import ConfigParser
+import sys
+import datetime
+import os
 
 Config = ConfigParser.ConfigParser()
 Config.read("config.ini")
-BASE_SERVER = "https://"+Config.get('access','server')+".api.mailchimp.com/3.0"
+BASE_SERVER = "https://{}.api.mailchimp.com/3.0".format(Config.get('access','server'))
 # Single list for now
 LISTNUM = Config.get('access','listnum')
 
 HEADERS = {"Content-Type": "application/json",
   "Authorization": "Basic "+base64.encodestring(Config.get('access','username')+":"+Config.get('access','api_key')).replace('\n','')}
+#print(HEADERS)
 
 def GetLists():
-  request = urllib2.Request(BASE_SERVER+"/lists", None, HEADERS)
+  url = "{}/lists".format(BASE_SERVER)
+  request = urllib2.Request(url, None, HEADERS)
+  VALUE = urllib2.urlopen(request)
+
+  JSON = json.loads(VALUE.read())
+  print(json.dumps(JSON, indent=4, sort_keys=True))
+  return
+
+def GetListDetail(listnum):
+  url = "{}/lists/{}".format(BASE_SERVER, listnum)
+  request = urllib2.Request(url, None, HEADERS)
   VALUE = urllib2.urlopen(request)
 
   JSON = json.loads(VALUE.read())
@@ -30,12 +44,24 @@ def BatchUser( listnum, filename ):
   return
 
 def SendList( listnum, data ):
-  request = urllib2.Request(BASE_SERVER+"/lists/"+listnum, data, HEADERS)
+  url = "{}/lists/{}".format(BASE_SERVER, listnum)
+  request = urllib2.Request(url, data, HEADERS)
   # Can fail if we try to insert a user previously put on the cleaned category
-  VALUE = urllib2.urlopen(request)
+  try:
+    output = open('output.{}.json'.format(datetime.datetime.now()), 'w')
+    VALUE = urllib2.urlopen(request)
+    retval = VALUE.read()
+    JSON = json.loads(retval)
+    output.write(retval)
+    output.close()
+    print(json.dumps(JSON, indent=4, sort_keys=True))
+  except urllib2.HTTPError, e:
+    print('Error: {} @ {}'.format(e.code, url))
+    if e.code == 404:
+      raise
+  except:
+    print("Unexpected error: ", sys.exc_info()[0])
 
-  JSON = json.loads(VALUE.read())
-  print(json.dumps(JSON, indent=4, sort_keys=True))
   return
 
 def ReadCSV( filename ):
@@ -75,13 +101,17 @@ def ProcessUser(line):
   if len(name) > 0:
     u['merge_fields'] = name
   
-  u['status'] = 'subscribed'
+  u['status_if_new'] = 'subscribed'
+  #u['status'] = 'subscribed'
   return u
 
 #GetLists()
+#GetListDetail(LISTNUM)
 #BatchUser(LISTNUM, "userbatch_1.json")
+sendlist = []
 sendlist = ReadCSV("importlist.csv")
 
 # Send 500 by 500
 for pack in sendlist:
+  #print(json.dumps(pack))
   SendList(LISTNUM, json.dumps(pack))
