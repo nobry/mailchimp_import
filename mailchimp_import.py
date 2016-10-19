@@ -7,6 +7,7 @@ import ConfigParser
 import sys
 import datetime
 import os
+import md5
 
 Config = ConfigParser.ConfigParser()
 Config.read("config.ini")
@@ -43,7 +44,7 @@ def BatchUser( listnum, filename ):
   SendList(listnum, content)
   return
 
-def SendList( listnum, data ):
+def SendListPack( listnum, data ):
   url = "{}/lists/{}".format(BASE_SERVER, listnum)
   request = urllib2.Request(url, data, HEADERS)
   # Can fail if we try to insert a user previously put on the cleaned category
@@ -101,17 +102,57 @@ def ProcessUser(line):
   if len(name) > 0:
     u['merge_fields'] = name
   
-  u['status_if_new'] = 'subscribed'
-  #u['status'] = 'subscribed'
+  #u['status_if_new'] = 'subscribed'
+  u['status'] = 'subscribed'
   return u
+
+def SendPack():
+  sendlist = []
+  sendlist = ReadCSV("importlist.csv")
+  
+  # Send 500 by 500
+  for pack in sendlist:
+    #print(json.dumps(pack))
+    SendListPack(LISTNUM, json.dumps(pack))
+  return
+
+def EmailExist( list, email ):
+  emailmd5 = md5.new(email.lower()).hexdigest()
+  url = "{}/lists/{}/members/{}".format(BASE_SERVER, list, emailmd5)
+  request = urllib2.Request(url, None, HEADERS)
+  try:
+    VALUE = urllib2.urlopen(request)
+    print("{} exists".format(email))
+  except urllib2.HTTPError, e:
+    if e.code == 404:
+      print("{} doesn't exist".format(email))
+      return False
+  return True
+
+def CreateMember( list, data ):
+  url = "{}/lists/{}/members".format(BASE_SERVER, list)
+  request = urllib2.Request(url, data, HEADERS)
+  retval = ""
+  try:
+    VALUE = urllib2.urlopen(request)
+    retval = VALUE.read()
+  except urllib2.HTTPError, e:
+    print("{}: Couldn't create".format(e.code))
+    raise
+  return retval
+
+def SendListSingle( filename ):
+  f = open(filename, 'r')
+  lines = f.read().splitlines()
+  for line in lines:
+    u = ProcessUser(line)
+    if not EmailExist(LISTNUM, u['email_address']):
+      result = CreateMember(LISTNUM, json.dumps(u))
+      print(result)
+  return
 
 #GetLists()
 #GetListDetail(LISTNUM)
 #BatchUser(LISTNUM, "userbatch_1.json")
-sendlist = []
-sendlist = ReadCSV("importlist.csv")
 
-# Send 500 by 500
-for pack in sendlist:
-  #print(json.dumps(pack))
-  SendList(LISTNUM, json.dumps(pack))
+SendListSingle('importlist.csv')
